@@ -16,10 +16,13 @@
 #include "engine/postfx.h"
 #include "world/map.h"
 #include "game/player.h"
+#include "game/items.h"
+#include "game/deathcard.h"
 #include "ai/monster.h"
 
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 /* ── Game States ──────────────────────────────────────────────────── */
 typedef enum {
@@ -38,6 +41,16 @@ typedef struct {
     Map             map;
     Player          player;
     Monster         monster;
+
+    /* Items & Inventory */
+    Item      items[MAX_ITEMS];
+    int       itemCount;
+    Inventory inventory;
+
+    /* Persistence */
+    PlayerProfile profile;
+    DeathReason   lastDeathReason;
+    float         deathScreenTimer;
 
     /* Debug */
     bool  showMinimap;
@@ -96,6 +109,10 @@ static void draw_hud(const Game *g) {
     /* Crosshair — subtle dot */
     DrawCircle(sw / 2, sh / 2, 2, (Color){0, 255, 200, 80});
 
+    /* Memory Cores (top left) */
+    DrawText(TextFormat("CORES: %d / %d", g->inventory.memoryCores, g->inventory.totalCoresNeeded),
+             20, 12, 14, (Color){0, 255, 200, 200});
+
     /* Movement mode indicator (bottom left) */
     const char *modeStr = "WALK";
     Color modeColor = (Color){150, 150, 160, 200};
@@ -120,6 +137,11 @@ static void draw_hud(const Game *g) {
     } else {
         DrawText("[F] LIGHT OFF", sw - 120, sh - 30, 10, (Color){80, 80, 80, 150});
     }
+
+    /* Run number (bottom center) */
+    const char *runStr = TextFormat("RUN #%d", g->runNumber);
+    int runW = MeasureText(runStr, 10);
+    DrawText(runStr, (sw - runW) / 2, sh - 16, 10, (Color){60, 60, 70, 150});
 }
 
 /* ── Draw debug info ──────────────────────────────────────────────── */
@@ -165,7 +187,7 @@ static void draw_title(float time) {
     }
 
     /* Version */
-    DrawText("SPRINT 1 // ENGINE FOUNDATION", 10, sh - 20, 10, (Color){40, 40, 50, 150});
+    DrawText("v0.3 // THE LEARNING DARK", 10, sh - 20, 10, (Color){40, 40, 50, 150});
 }
 
 /* ═════════════════════════════════════════════════════════════════════
@@ -207,6 +229,14 @@ int main(void) {
     /* Initialize monster at spawn point */
     monster_init(&game.monster, &game.renderer, game.map.monsterX, game.map.monsterY);
 
+    /* Initialize items from map */
+    items_init(game.items, &game.itemCount, &game.map, &game.renderer);
+    inventory_init(&game.inventory, game.map.objectiveCount);
+
+    /* Initialize player profile (load if exists) */
+    profile_init(&game.profile);
+    profile_load(&game.profile, "erebus_profile.dat");
+
     /* Ensure nearest-neighbor filtering for crisp pixels */
     SetTextureFilter(game.renderer.screenTex, TEXTURE_FILTER_POINT);
 
@@ -246,11 +276,45 @@ int main(void) {
                 game.renderer.sprites[game.monster.spriteId].y = game.monster.y;
             }
 
+            /* Update items (collection) */
+            items_update(game.items, game.itemCount, &game.player, &game.inventory, dt);
+
+            /* Check if monster caught player */
+            {
+                float mdx = game.monster.x - game.player.posX;
+                float mdy = game.monster.y - game.player.posY;
+                float mdist = sqrtf(mdx*mdx + mdy*mdy);
+                if (mdist < 0.5f) {
+                    game.lastDeathReason = DEATH_CAUGHT;
+                    game.deathScreenTimer = 0;
+                    game.state = STATE_DEATH;
+                    EnableCursor();
+                }
+            }
+
+            /* Check if player reached exit with all cores */
+            {
+                int px = (int)game.player.posX;
+                int py = (int)game.player.posY;
+                if (px >= 0 && px < game.map.width && py >= 0 && py < game.map.height) {
+                    if ((game.map.cells[py][px].flags & CELL_EXIT) &&
+                        game.inventory.memoryCores >= game.inventory.totalCoresNeeded) {
+                        game.lastDeathReason = DEATH_SURVIVED;
+                        game.deathScreenTimer = 0;
+                        game.state = STATE_DEATH;
+                        EnableCursor();
+                    }
+                }
+            }
+
             /* Update run timer */
             game.runTimer -= dt;
             if (game.runTimer <= 0) {
                 game.runTimer = 0;
-                /* Time's up — death (to be implemented) */
+                game.lastDeathReason = DEATH_TIMER;
+                game.deathScreenTimer = 0;
+                game.state = STATE_DEATH;
+                EnableCursor();
             }
 
             /* Toggle debug keys */
@@ -326,12 +390,112 @@ int main(void) {
             break;
         }
 
+        /* ── DEATH SCREEN ──────────────────────────────────────── */
+        case STATE_DEATH: {
+            game.deathScreenTimer += dt;
+
+            /* Record this run */
+            if (game.deathScreenTimer < dt * 2) { /* Only on first frame */
+                RunRecord rec = {0};
+                rec.runNumber = game.runNumber;
+                rec.reason = game.lastDeathReason;
+                rec.survivalTime = 13.0f * 60.0f - game.runTimer;
+                rec.timeSprinting = game.player.timeSprinting;
+                rec.timeHiding = game.player.timeHiding;
+                rec.timeMoving = game.player.timeMoving;
+                rec.avgPanic = game.player.panicInput;
+                rec.coresCollected = game.inventory.memoryCores;
+                rec.totalCores = game.inventory.totalCoresNeeded;
+                profile_record_run(&game.profile, &rec);
+                profile_save(&game.profile, "erebus_profile.dat");
+                nn_save(&game.monster.brain, "erebus_brain.dat");
+            }
+
+            if (IsKeyPressed(KEY_ENTER)) {
+                /* Restart run */
+                game.runNumber++;
+                game.runTimer = 13.0f * 60.0f;
+                player_init(&game.player, game.map.spawnX, game.map.spawnY, game.map.spawnAngle);
+                game.monster.x = game.map.monsterX;
+                game.monster.y = game.map.monsterY;
+                game.monster.state = MSTATE_WANDER;
+                game.monster.suspicion = 0;
+                inventory_init(&game.inventory, game.map.objectiveCount);
+                /* Reset item collection states */
+                for (int i = 0; i < game.itemCount; i++) {
+                    game.items[i].collected = false;
+                    game.items[i].active = true;
+                }
+                game.state = STATE_PLAYING;
+                DisableCursor();
+            }
+
+            BeginDrawing();
+            ClearBackground((Color){5, 2, 2, 255});
+
+            int sw = GetScreenWidth();
+            int sh = GetScreenHeight();
+
+            /* Death reason */
+            const char *deathMsg;
+            Color deathCol;
+            switch (game.lastDeathReason) {
+                case DEATH_CAUGHT:
+                    deathMsg = "IT FOUND YOU";
+                    deathCol = (Color){255, 30, 30, 255};
+                    break;
+                case DEATH_TIMER:
+                    deathMsg = "TIME EXPIRED";
+                    deathCol = (Color){200, 100, 50, 255};
+                    break;
+                case DEATH_SURVIVED:
+                    deathMsg = "Y O U  E S C A P E D";
+                    deathCol = (Color){0, 255, 200, 255};
+                    break;
+                default:
+                    deathMsg = "UNKNOWN";
+                    deathCol = WHITE;
+                    break;
+            }
+
+            int dmw = MeasureText(deathMsg, 40);
+            DrawText(deathMsg, (sw - dmw) / 2, sh / 2 - 80, 40, deathCol);
+
+            /* Stats */
+            float survived = 13.0f * 60.0f - game.runTimer;
+            int smins = (int)survived / 60;
+            int ssecs = (int)survived % 60;
+
+            Color statCol = (Color){120, 120, 130, 200};
+            DrawText(TextFormat("Survived: %02d:%02d", smins, ssecs), sw/2 - 80, sh/2 - 20, 14, statCol);
+            DrawText(TextFormat("Cores: %d / %d", game.inventory.memoryCores, game.inventory.totalCoresNeeded), sw/2 - 80, sh/2, 14, statCol);
+            DrawText(TextFormat("Sprint Time: %.0fs", game.player.timeSprinting), sw/2 - 80, sh/2 + 20, 14, statCol);
+            DrawText(TextFormat("Hide Time: %.0fs", game.player.timeHiding), sw/2 - 80, sh/2 + 40, 14, statCol);
+
+            /* Neural network testimony */
+            DrawText("// NEURAL NETWORK TESTIMONY //", sw/2 - 120, sh/2 + 80, 12, (Color){255, 50, 50, 150});
+            DrawText(TextFormat("Weights updated. Run %d recorded.", game.runNumber), sw/2 - 110, sh/2 + 100, 12, (Color){200, 60, 60, 120});
+            DrawText("It remembers.", sw/2 - 50, sh/2 + 120, 14, (Color){255, 0, 0, (unsigned char)(100 + (int)(sinf(game.deathScreenTimer * 2) * 80))});
+
+            /* Continue prompt */
+            if (game.deathScreenTimer > 2.0f && ((int)(game.deathScreenTimer * 2) % 2 == 0)) {
+                const char *contMsg = "[ ENTER ] Begin Next Run";
+                int cmw = MeasureText(contMsg, 14);
+                DrawText(contMsg, (sw - cmw) / 2, sh - 50, 14, (Color){0, 200, 160, 180});
+            }
+
+            EndDrawing();
+            break;
+        }
+
         default:
             break;
         }
     }
 
     /* ── Cleanup ────────────────────────────────────────────────── */
+    profile_save(&game.profile, "erebus_profile.dat");
+    nn_save(&game.monster.brain, "erebus_brain.dat");
     rc_free(&game.renderer);
     CloseWindow();
     return 0;

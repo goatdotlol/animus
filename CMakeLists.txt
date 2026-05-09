@@ -25,6 +25,8 @@ set(SOURCES
     src/ai/neural_net.c
     src/ai/pathfinding.c
     src/ai/monster.c
+    src/game/items.c
+    src/game/deathcard.c
 )
 
 # ── Build the executable ────────────────────────────────────────────
