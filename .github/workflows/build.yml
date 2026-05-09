@@ -13,22 +13,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup MinGW
-        uses: egor-tensin/setup-mingw@v2
-        with:
-          platform: x64
-
-      - name: Configure CMake
-        run: cmake -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
+      - name: Configure CMake (MSVC)
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
-        run: cmake --build build --config Release -- -j4
+        run: cmake --build build --config Release
 
       - name: Package
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path package
-          Copy-Item build/erebus.exe package/
+          $exe = Get-ChildItem -Recurse -Path build -Filter "erebus.exe" | Select-Object -First 1
+          if ($exe) {
+            Copy-Item $exe.FullName package/
+          } else {
+            Write-Error "erebus.exe not found in build directory"
+            Get-ChildItem -Recurse -Path build -Filter "*.exe" | ForEach-Object { Write-Host $_.FullName }
+            exit 1
+          }
           if (Test-Path assets) {
             Copy-Item -Recurse assets package/assets
           }
