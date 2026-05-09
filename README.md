@@ -74,7 +74,7 @@ cmake --build build
 
 ## Credits
 
-Designed by FiveSaw & Gamini Vijayasingha.
+Designed by FiveSaw.
 
 ## License
 
