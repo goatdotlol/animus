@@ -16,10 +16,12 @@
 #include "engine/postfx.h"
 #include "engine/audio.h"
 #include "world/map.h"
+#include "world/mapgen.h"
 #include "game/player.h"
 #include "game/items.h"
 #include "game/deathcard.h"
 #include "game/options.h"
+#include "game/panicroom.h"
 #include "ai/monster.h"
 #include "ai/training.h"
 
@@ -65,6 +67,10 @@ typedef struct {
 
     /* Options */
     GameOptions   options;
+
+    /* Panic Room */
+    PanicRoom     panicRoom;
+    MapGenResult  mapGenResult;
 
     /* Debug */
     bool  showMinimap;
@@ -494,22 +500,10 @@ int main(void) {
             }
 
             if (IsKeyPressed(KEY_ENTER)) {
-                /* Restart run */
-                game.runNumber++;
-                game.runTimer = 13.0f * 60.0f;
-                player_init(&game.player, game.map.spawnX, game.map.spawnY, game.map.spawnAngle);
-                game.monster.x = game.map.monsterX;
-                game.monster.y = game.map.monsterY;
-                game.monster.state = MSTATE_WANDER;
-                game.monster.suspicion = 0;
-                inventory_init(&game.inventory, game.map.objectiveCount);
-                /* Reset item collection states */
-                for (int i = 0; i < game.itemCount; i++) {
-                    game.items[i].collected = false;
-                    game.items[i].active = true;
-                }
-                game.state = STATE_PLAYING;
-                DisableCursor();
+                /* Go to Panic Room between runs */
+                int surgPts = 1 + (int)(game.player.timeHiding / 30.0f);
+                panicroom_init(&game.panicRoom, surgPts);
+                game.state = STATE_PANIC_ROOM;
             }
 
             BeginDrawing();
@@ -567,6 +561,39 @@ int main(void) {
             }
 
             EndDrawing();
+            break;
+        }
+
+        /* -- PANIC ROOM ------------------------------------------ */
+        case STATE_PANIC_ROOM: {
+            BeginDrawing();
+            bool done = panicroom_update_and_draw(&game.panicRoom, &game.monster.brain,
+                                                   &game.profile, dt);
+            EndDrawing();
+
+            if (done) {
+                /* Generate new procedural map for next run */
+                game.runNumber++;
+                game.runTimer = 13.0f * 60.0f;
+
+                /* Reset renderer sprites for new map */
+                game.renderer.spriteCount = 0;
+
+                /* Procedural map (seed from run number for variety) */
+                mapgen_generate(&game.map, (unsigned int)(game.runNumber * 31337),
+                                24, 24, &game.mapGenResult);
+
+                /* Reinitialize player, monster, items */
+                player_init(&game.player, game.map.spawnX, game.map.spawnY, game.map.spawnAngle);
+                monster_init(&game.monster, &game.renderer, game.map.monsterX, game.map.monsterY);
+                items_init(game.items, &game.itemCount, &game.map, &game.renderer);
+                inventory_init(&game.inventory, game.map.objectiveCount);
+
+                nn_save(&game.monster.brain, "erebus_brain.dat");
+
+                game.state = STATE_PLAYING;
+                DisableCursor();
+            }
             break;
         }
 
