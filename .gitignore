@@ -1,0 +1,24 @@
+build/
+package/
+*.exe
+*.obj
+*.o
+*.d
+*.pdb
+*.ilk
+.vs/
+.vscode/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Design docs (keep locally, don't ship)
+*.html
+chat.txt
+New Text Document*.txt
