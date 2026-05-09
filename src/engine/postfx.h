@@ -1,5 +1,5 @@
 /*
- * EREBUS — Post-Processing Effects (placeholder for Sprint 1)
+ * EREBUS — Post-Processing Effects (v2: Dynamic Horror Effects)
  * CRT scanlines, barrel distortion, chromatic aberration, vignette.
  * Full implementation comes in Sprint 8; this provides the interface.
  */
@@ -15,6 +15,11 @@ typedef struct {
     float chromaticAberration;  /* 0..1 — RGB split amount            */
     float vignetteStrength;     /* 0..1 — edge darkening              */
     float noiseAmount;          /* 0..1 — screen noise/static         */
+
+    /* Dynamic horror effects (driven by game state) */
+    float dangerTint;           /* 0..1 — red overlay when monster is near */
+    float glitchAmount;         /* 0..1 — visual corruption (overfitting) */
+    float pulseTimer;           /* Internal timer for pulsing effects */
 } PostFX;
 
 void postfx_init(PostFX *fx);

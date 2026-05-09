@@ -380,6 +380,32 @@ int main(void) {
             /* Cast rays and fill the pixel buffer */
             rc_render(&game.renderer, &game.map, &game.player);
 
+            /* Drive post-FX from monster state */
+            {
+                float mdx3 = game.monster.x - game.player.posX;
+                float mdy3 = game.monster.y - game.player.posY;
+                float mDist3 = sqrtf(mdx3*mdx3 + mdy3*mdy3);
+
+                /* Chromatic aberration increases when monster is close */
+                float targetCA = (mDist3 < 8.0f) ? (8.0f - mDist3) / 8.0f : 0.0f;
+                game.postfx.chromaticAberration += (targetCA - game.postfx.chromaticAberration) * 0.05f;
+
+                /* Danger tint pulses red when monster is near */
+                float targetDanger = (mDist3 < 6.0f) ? (6.0f - mDist3) / 6.0f : 0.0f;
+                game.postfx.dangerTint += (targetDanger - game.postfx.dangerTint) * 0.08f;
+
+                /* Glitch effect when monster is in GLITCH state */
+                float targetGlitch = (game.monster.state == MSTATE_GLITCH) ? 0.8f : 0.0f;
+                game.postfx.glitchAmount += (targetGlitch - game.postfx.glitchAmount) * 0.1f;
+
+                /* More noise when monster is stalking */
+                if (game.monster.state == MSTATE_STALK && mDist3 < 8.0f) {
+                    game.postfx.noiseAmount = 0.04f + (8.0f - mDist3) * 0.01f;
+                } else {
+                    game.postfx.noiseAmount = 0.02f;
+                }
+            }
+
             /* Apply post-processing to the buffer */
             postfx_apply(&game.postfx, game.renderer.buffer, RC_WIDTH, RC_HEIGHT);
 
