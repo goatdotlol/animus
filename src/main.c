@@ -16,6 +16,7 @@
 #include "engine/postfx.h"
 #include "world/map.h"
 #include "game/player.h"
+#include "ai/monster.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -36,6 +37,7 @@ typedef struct {
     PostFX          postfx;
     Map             map;
     Player          player;
+    Monster         monster;
 
     /* Debug */
     bool  showMinimap;
@@ -129,6 +131,7 @@ static void draw_debug(const Game *g) {
     DrawText(TextFormat("ANG: %.2f", g->player.angle), 10, y + 32, 14, c);
     DrawText(TextFormat("NOISE: %.1f", g->player.noiseRadius), 10, y + 48, 14, c);
     DrawText(TextFormat("PANIC: %.2f", g->player.panicInput), 10, y + 64, 14, c);
+    DrawText(TextFormat("M-STATE: %d", g->monster.state), 10, y + 80, 14, c);
 }
 
 /* ── Title Screen ─────────────────────────────────────────────────── */
@@ -201,6 +204,9 @@ int main(void) {
     /* Initialize player at spawn point */
     player_init(&game.player, game.map.spawnX, game.map.spawnY, game.map.spawnAngle);
 
+    /* Initialize monster at spawn point */
+    monster_init(&game.monster, &game.renderer, game.map.monsterX, game.map.monsterY);
+
     /* Ensure nearest-neighbor filtering for crisp pixels */
     SetTextureFilter(game.renderer.screenTex, TEXTURE_FILTER_POINT);
 
@@ -230,6 +236,15 @@ int main(void) {
         case STATE_PLAYING:
             /* Update player */
             player_update(&game.player, &game.map, dt);
+
+            /* Update monster */
+            monster_update(&game.monster, &game.map, &game.player, dt);
+            
+            /* Update monster sprite position for renderer */
+            if (game.monster.spriteId >= 0 && game.monster.spriteId < RC_MAX_SPRITES) {
+                game.renderer.sprites[game.monster.spriteId].x = game.monster.x;
+                game.renderer.sprites[game.monster.spriteId].y = game.monster.y;
+            }
 
             /* Update run timer */
             game.runTimer -= dt;

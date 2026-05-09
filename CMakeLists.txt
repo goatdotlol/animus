@@ -22,6 +22,9 @@ set(SOURCES
     src/engine/postfx.c
     src/world/map.c
     src/game/player.c
+    src/ai/neural_net.c
+    src/ai/pathfinding.c
+    src/ai/monster.c
 )
 
 # ── Build the executable ────────────────────────────────────────────
