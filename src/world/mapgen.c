@@ -78,9 +78,9 @@ static void carve_room(Map *map, BSPNode *node, Room rooms[], int *roomCount) {
     /* Room type based on size */
     int roomType = rand() % 5;
     float light = 0.3f + (float)(rand() % 40) / 100.0f;
-    int wallTex = (roomType < 2) ? TEX_LAB_TILE : (roomType < 4) ? TEX_CONCRETE : TEX_METAL_PANEL;
-    int floorTex = TEX_CONCRETE;
-    int ceilTex = TEX_METAL_PANEL;
+    int wallTex = (roomType < 2) ? TEX_WALL_LAB : (roomType < 4) ? TEX_WALL_CONCRETE : TEX_WALL_METAL;
+    int floorTex = TEX_FLOOR_TILE;
+    int ceilTex = TEX_CEIL_PANEL;
 
     for (int y = ry; y < ry + rh; y++) {
         for (int x = rx; x < rx + rw; x++) {
@@ -113,11 +113,11 @@ static void carve_corridor_h(Map *map, int x1, int x2, int y) {
         if (x >= 0 && x < map->width && y >= 0 && y < map->height) {
             map->cells[y][x].flags = 0;
             map->cells[y][x].light = 0.15f;
-            map->cells[y][x].floorTex = TEX_CONCRETE;
-            map->cells[y][x].wallTexN = TEX_METAL_PANEL;
-            map->cells[y][x].wallTexS = TEX_METAL_PANEL;
-            map->cells[y][x].wallTexE = TEX_METAL_PANEL;
-            map->cells[y][x].wallTexW = TEX_METAL_PANEL;
+            map->cells[y][x].floorTex = TEX_FLOOR_TILE;
+            map->cells[y][x].wallTexN = TEX_WALL_DARK;
+            map->cells[y][x].wallTexS = TEX_WALL_DARK;
+            map->cells[y][x].wallTexE = TEX_WALL_DARK;
+            map->cells[y][x].wallTexW = TEX_WALL_DARK;
         }
     }
 }
@@ -129,11 +129,11 @@ static void carve_corridor_v(Map *map, int y1, int y2, int x) {
         if (x >= 0 && x < map->width && y >= 0 && y < map->height) {
             map->cells[y][x].flags = 0;
             map->cells[y][x].light = 0.15f;
-            map->cells[y][x].floorTex = TEX_CONCRETE;
-            map->cells[y][x].wallTexN = TEX_METAL_PANEL;
-            map->cells[y][x].wallTexS = TEX_METAL_PANEL;
-            map->cells[y][x].wallTexE = TEX_METAL_PANEL;
-            map->cells[y][x].wallTexW = TEX_METAL_PANEL;
+            map->cells[y][x].floorTex = TEX_FLOOR_TILE;
+            map->cells[y][x].wallTexN = TEX_WALL_DARK;
+            map->cells[y][x].wallTexS = TEX_WALL_DARK;
+            map->cells[y][x].wallTexE = TEX_WALL_DARK;
+            map->cells[y][x].wallTexW = TEX_WALL_DARK;
         }
     }
 }
@@ -185,12 +185,12 @@ void mapgen_generate(Map *map, unsigned int seed, int width, int height, MapGenR
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
             map->cells[y][x].flags = CELL_SOLID;
-            map->cells[y][x].wallTexN = TEX_CONCRETE;
-            map->cells[y][x].wallTexS = TEX_CONCRETE;
-            map->cells[y][x].wallTexE = TEX_CONCRETE;
-            map->cells[y][x].wallTexW = TEX_CONCRETE;
-            map->cells[y][x].floorTex = TEX_CONCRETE;
-            map->cells[y][x].ceilTex = TEX_METAL_PANEL;
+            map->cells[y][x].wallTexN = TEX_WALL_CONCRETE;
+            map->cells[y][x].wallTexS = TEX_WALL_CONCRETE;
+            map->cells[y][x].wallTexE = TEX_WALL_CONCRETE;
+            map->cells[y][x].wallTexW = TEX_WALL_CONCRETE;
+            map->cells[y][x].floorTex = TEX_FLOOR_TILE;
+            map->cells[y][x].ceilTex = TEX_CEIL_PANEL;
             map->cells[y][x].light = 0.0f;
             map->cells[y][x].ceilHeight = 1.0f;
             map->cells[y][x].floorHeight = 0.0f;
