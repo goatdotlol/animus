@@ -645,6 +645,7 @@ int main(void) {
 
                 game.state = STATE_PLAYING;
                 DisableCursor();
+                } /* close else */
             }
             break;
         }

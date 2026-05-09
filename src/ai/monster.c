@@ -17,7 +17,7 @@
 #include <math.h>
 #include <stdio.h>
 
-void monster_init(Monster *m, RaycastRenderer *r, float startX, float startY) {
+void monster_init(Monster *m, struct RaycastRenderer *r, float startX, float startY) {
     m->x = startX;
     m->y = startY;
     m->dirX = 1.0f;

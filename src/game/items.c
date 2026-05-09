@@ -42,7 +42,7 @@ void inventory_init(Inventory *inv, int totalCores) {
     inv->totalCoresNeeded = totalCores;
 }
 
-void items_init(Item items[], int *count, Map *map, RaycastRenderer *r) {
+void items_init(Item items[], int *count, struct Map *map, struct RaycastRenderer *r) {
     *count = 0;
 
     /* Create item textures */

@@ -7,7 +7,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef PI
 #define PI 3.14159265358979f
+#endif
 
 /* ── Synthesis helpers ────────────────────────────────────────────── */
 static float sine_wave(float phase, float freq) {
