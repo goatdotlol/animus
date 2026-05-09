@@ -60,7 +60,7 @@ struct Map;
 struct Player;
 struct RaycastRenderer;
 
-void monster_init(Monster *m, struct RaycastRenderer *r, float startX, float startY);
+void monster_init(Monster *m, struct RaycastRenderer *r, float startX, float startY, int runNumber);
 void monster_update(Monster *m, struct Map *map, const struct Player *p, float dt);
 
 #endif /* AI_MONSTER_H */

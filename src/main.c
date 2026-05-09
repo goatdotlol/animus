@@ -59,6 +59,7 @@ typedef struct {
     PlayerProfile profile;
     DeathReason   lastDeathReason;
     float         deathScreenTimer;
+    TestimonyState testimony;
 
     /* Audio */
     AudioEngine   audio;
@@ -164,6 +165,13 @@ static void draw_hud(const Game *g) {
         DrawText("[F] LIGHT OFF", sw - 120, sh - 30, 10, (Color){80, 80, 80, 150});
     }
 
+    /* Inventory */
+    int invX = sw / 2 - 120;
+    int invY = sh - 35;
+    DrawText("INVENTORY", invX, invY - 15, 10, (Color){100, 100, 120, 200});
+    DrawText(TextFormat("[1] DECOY: %d", g->inventory.decoys), invX, invY, 12, g->inventory.decoys > 0 ? (Color){0, 255, 200, 200} : (Color){80, 80, 80, 200});
+    DrawText(TextFormat("[2] ADREN: %d", g->inventory.adrenalines), invX + 90, invY, 12, g->inventory.adrenalines > 0 ? (Color){255, 150, 50, 200} : (Color){80, 80, 80, 200});
+
     /* Run number (bottom center) */
     const char *runStr = TextFormat("RUN #%d", g->runNumber);
     int runW = MeasureText(runStr, 10);
@@ -253,7 +261,7 @@ int main(void) {
     player_init(&game.player, game.map.spawnX, game.map.spawnY, game.map.spawnAngle);
 
     /* Initialize monster at spawn point */
-    monster_init(&game.monster, &game.renderer, game.map.monsterX, game.map.monsterY);
+    monster_init(&game.monster, &game.renderer, game.map.monsterX, game.map.monsterY, game.runNumber);
 
     /* Initialize items from map */
     items_init(game.items, &game.itemCount, &game.map, &game.renderer);
@@ -320,6 +328,22 @@ int main(void) {
             /* Update items (collection) */
             items_update(game.items, game.itemCount, &game.player, &game.inventory, dt);
 
+            /* Item Usage */
+            if (IsKeyPressed(KEY_ONE) && game.inventory.decoys > 0) {
+                game.inventory.decoys--;
+                /* Alert monster to decoy position */
+                game.monster.state = MSTATE_INVESTIGATE;
+                game.monster.lastSeenPlayerX = game.player.posX;
+                game.monster.lastSeenPlayerY = game.player.posY;
+                path_find(&game.map, (int)game.monster.x, (int)game.monster.y,
+                          (int)game.monster.lastSeenPlayerX, (int)game.monster.lastSeenPlayerY,
+                          &game.monster.currentPath);
+            }
+            if (IsKeyPressed(KEY_TWO) && game.inventory.adrenalines > 0) {
+                game.inventory.adrenalines--;
+                game.player.timeSprinting = 0.0f; /* Reset sprint tracking / exhaustion */
+            }
+
             /* Update audio engine */
             {
                 float mdx2 = game.monster.x - game.player.posX;
@@ -345,7 +369,7 @@ int main(void) {
                 float mdist = sqrtf(mdx*mdx + mdy*mdy);
                 if (mdist < 0.5f) {
                     game.lastDeathReason = DEATH_CAUGHT;
-                    game.deathScreenTimer = 0;
+                    testimony_init(&game.testimony);
                     game.state = STATE_DEATH;
                     EnableCursor();
                 }
@@ -359,7 +383,7 @@ int main(void) {
                     if ((game.map.cells[py][px].flags & CELL_EXIT) &&
                         game.inventory.memoryCores >= game.inventory.totalCoresNeeded) {
                         game.lastDeathReason = DEATH_SURVIVED;
-                        game.deathScreenTimer = 0;
+                        testimony_init(&game.testimony);
                         game.state = STATE_DEATH;
                         EnableCursor();
                     }
@@ -371,7 +395,7 @@ int main(void) {
             if (game.runTimer <= 0) {
                 game.runTimer = 0;
                 game.lastDeathReason = DEATH_TIMER;
-                game.deathScreenTimer = 0;
+                testimony_init(&game.testimony);
                 game.state = STATE_DEATH;
                 EnableCursor();
             }
@@ -512,31 +536,38 @@ int main(void) {
 
         /* ── DEATH SCREEN ──────────────────────────────────────── */
         case STATE_DEATH: {
-            game.deathScreenTimer += dt;
+            if (!game.testimony.done) {
+                BeginDrawing();
+                bool testimonyFinished = testimony_update_and_draw(&game.testimony, &game.replayBuf, dt);
+                EndDrawing();
 
-            /* Record this run */
-            if (game.deathScreenTimer < dt * 2) { /* Only on first frame */
-                RunRecord rec = {0};
-                rec.runNumber = game.runNumber;
-                rec.reason = game.lastDeathReason;
-                rec.survivalTime = 13.0f * 60.0f - game.runTimer;
-                rec.timeSprinting = game.player.timeSprinting;
-                rec.timeHiding = game.player.timeHiding;
-                rec.timeMoving = game.player.timeMoving;
-                rec.avgPanic = game.player.panicInput;
-                rec.coresCollected = game.inventory.memoryCores;
-                rec.totalCores = game.inventory.totalCoresNeeded;
-                profile_record_run(&game.profile, &rec);
-                profile_save(&game.profile, "erebus_profile.dat");
-                nn_save(&game.monster.brain, "erebus_brain.dat");
+                if (testimonyFinished) {
+                    game.deathScreenTimer = 0;
+                    
+                    /* Record this run */
+                    RunRecord rec = {0};
+                    rec.runNumber = game.runNumber;
+                    rec.reason = game.lastDeathReason;
+                    rec.survivalTime = 13.0f * 60.0f - game.runTimer;
+                    rec.timeSprinting = game.player.timeSprinting;
+                    rec.timeHiding = game.player.timeHiding;
+                    rec.timeMoving = game.player.timeMoving;
+                    rec.avgPanic = game.player.panicInput;
+                    rec.coresCollected = game.inventory.memoryCores;
+                    rec.totalCores = game.inventory.totalCoresNeeded;
+                    profile_record_run(&game.profile, &rec);
+                    profile_save(&game.profile, "erebus_profile.dat");
+                    nn_save(&game.monster.brain, "erebus_brain.dat");
 
-                /* TRAIN the neural network on this run's data */
-                training_run(&game.monster.brain, &game.replayBuf, &game.profile);
-                training_mutate(&game.monster.brain, &game.profile, game.runNumber * 7919);
-                replay_init(&game.replayBuf); /* Clear buffer for next run */
+                    /* TRAIN the neural network on this run's data */
+                    training_run(&game.monster.brain, &game.replayBuf, &game.profile);
+                    training_mutate(&game.monster.brain, &game.profile, game.runNumber * 7919);
+                    replay_init(&game.replayBuf); /* Clear buffer for next run */
 
-                audio_play_death(&game.audio);
-            }
+                    audio_play_death(&game.audio);
+                }
+            } else {
+                game.deathScreenTimer += dt;
 
             if (IsKeyPressed(KEY_ENTER)) {
                 bool escaped = (game.lastDeathReason == DEATH_SURVIVED);
@@ -607,6 +638,7 @@ int main(void) {
             }
 
             EndDrawing();
+            }
             break;
         }
 
@@ -637,7 +669,7 @@ int main(void) {
 
                 /* Reinitialize player, monster, items */
                 player_init(&game.player, game.map.spawnX, game.map.spawnY, game.map.spawnAngle);
-                monster_init(&game.monster, &game.renderer, game.map.monsterX, game.map.monsterY);
+                monster_init(&game.monster, &game.renderer, game.map.monsterX, game.map.monsterY, game.runNumber);
                 items_init(game.items, &game.itemCount, &game.map, &game.renderer);
                 inventory_init(&game.inventory, game.map.objectiveCount);
 

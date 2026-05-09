@@ -17,7 +17,7 @@
 #include <math.h>
 #include <stdio.h>
 
-void monster_init(Monster *m, struct RaycastRenderer *r, float startX, float startY) {
+void monster_init(Monster *m, struct RaycastRenderer *r, float startX, float startY, int runNumber) {
     m->x = startX;
     m->y = startY;
     m->dirX = 1.0f;
@@ -45,18 +45,41 @@ void monster_init(Monster *m, struct RaycastRenderer *r, float startX, float sta
 
     nn_init(&m->brain, 12345);
 
-    /* Create a red placeholder sprite for the monster */
+    /* Create the monster sprite based on its evolution (runNumber) */
     Color *monsterTex = calloc(RC_TEX_SIZE * RC_TEX_SIZE, sizeof(Color));
     for (int y = 0; y < RC_TEX_SIZE; y++) {
         for (int x = 0; x < RC_TEX_SIZE; x++) {
             float dx = (float)x - RC_TEX_SIZE/2;
             float dy = (float)y - RC_TEX_SIZE/2;
             float dist = sqrtf(dx*dx + dy*dy);
-            if (dist < 20) {
-                int glow = (int)(255 * (1.0f - dist/20.0f));
-                monsterTex[y * RC_TEX_SIZE + x] = (Color){(unsigned char)glow, 0, 0, 255};
+            
+            if (runNumber < 6) {
+                /* Infant: static red block with noise */
+                if (dist < 25) {
+                    unsigned char noise = rand() % 255;
+                    monsterTex[y * RC_TEX_SIZE + x] = (Color){noise, 0, 0, (unsigned char)(200 + (rand()%55))};
+                }
+            } else if (runNumber < 15) {
+                /* Hunter: humanoid silhouette (rough shape) */
+                bool isBody = (dx > -10 && dx < 10 && dy > -5 && dy < 30);
+                bool isHead = (dist < 12 && dy < -10);
+                if (isBody || isHead) {
+                    monsterTex[y * RC_TEX_SIZE + x] = (Color){255, 30, 30, 255};
+                } else if (dist < 20) {
+                    monsterTex[y * RC_TEX_SIZE + x] = (Color){100, 0, 0, (unsigned char)(200 * (1.0f - dist/20.0f))};
+                }
             } else {
-                monsterTex[y * RC_TEX_SIZE + x] = (Color){0, 0, 0, 0};
+                /* Apex: geometric face */
+                bool isEye = ((dx > 5 && dx < 15) || (dx < -5 && dx > -15)) && (dy > -10 && dy < 0);
+                bool isMouth = (dx > -10 && dx < 10) && (dy > 10 && dy < 15);
+                if (isEye) {
+                    monsterTex[y * RC_TEX_SIZE + x] = (Color){255, 255, 255, 255};
+                } else if (isMouth) {
+                    monsterTex[y * RC_TEX_SIZE + x] = (Color){0, 0, 0, 255};
+                } else if (dist < 24) {
+                    unsigned char intensity = (unsigned char)(255 * (1.0f - dist/24.0f));
+                    monsterTex[y * RC_TEX_SIZE + x] = (Color){intensity, 0, (unsigned char)(intensity/2), 255};
+                }
             }
         }
     }

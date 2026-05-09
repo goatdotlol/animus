@@ -72,23 +72,44 @@ void items_init(Item items[], int *count, struct Map *map, struct RaycastRendere
         }
     }
 
-    /* Scatter some batteries in dark areas */
+    /* Scatter consumable items in the map */
     for (int y = 0; y < map->height; y++) {
         for (int x = 0; x < map->width; x++) {
             if (!(map->cells[y][x].flags & CELL_SOLID) &&
-                map->cells[y][x].light < 0.3f &&
                 !(map->cells[y][x].flags & CELL_OBJECTIVE) &&
-                (rand() % 100) < 8 &&
                 *count < MAX_ITEMS) {
-                Item *item = &items[*count];
-                item->type = ITEM_BATTERY;
-                item->x = x + 0.5f;
-                item->y = y + 0.5f;
-                item->collected = false;
-                item->active = true;
-                item->bobOffset = (float)(rand() % 100) / 100.0f * 6.28f;
-                item->spriteId = rc_add_sprite(r, item->x, item->y, batteryTexId, 0.4f, WHITE);
-                (*count)++;
+                
+                int rnd = rand() % 1000;
+                ItemType type = ITEM_NONE;
+                int tex = batteryTexId;
+                Color col = WHITE;
+                
+                if (rnd < 5) {
+                    type = ITEM_ADRENALINE;
+                    tex = coreTexId;
+                    col = (Color){255, 100, 50, 255};
+                } else if (rnd < 10) {
+                    type = ITEM_DECOY;
+                    tex = batteryTexId;
+                    col = (Color){50, 100, 255, 255};
+                } else if (rnd < 30 && map->cells[y][x].light < 0.3f) {
+                    /* Batteries mostly in dark areas */
+                    type = ITEM_BATTERY;
+                    tex = batteryTexId;
+                    col = WHITE;
+                }
+                
+                if (type != ITEM_NONE) {
+                    Item *item = &items[*count];
+                    item->type = type;
+                    item->x = x + 0.5f;
+                    item->y = y + 0.5f;
+                    item->collected = false;
+                    item->active = true;
+                    item->bobOffset = (float)(rand() % 100) / 100.0f * 6.28f;
+                    item->spriteId = rc_add_sprite(r, item->x, item->y, tex, 0.4f, col);
+                    (*count)++;
+                }
             }
         }
     }

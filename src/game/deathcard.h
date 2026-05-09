@@ -57,7 +57,26 @@ void profile_record_run(PlayerProfile *prof, const RunRecord *record);
 bool profile_save(const PlayerProfile *prof, const char *filename);
 bool profile_load(PlayerProfile *prof, const char *filename);
 
+/* Generate a 16-character hex hash based on player profile stats */
+void profile_get_fingerprint(const PlayerProfile *prof, char *outBuffer);
+
 /* Generate training data from run history for the neural network */
 void profile_get_training_bias(const PlayerProfile *prof, float biases[NN_OUTPUTS]);
+
+/* ── Testimony System ────────────────────────────────────────────────── */
+
+struct ReplayBuffer;
+
+typedef struct {
+    int   phase;          /* 0 = Init, 1 = Question, 2 = Concluding */
+    int   questionId;     /* Which question is asked */
+    int   selectedAnswer; /* Currently highlighted answer (0, 1, 2) */
+    float timer;          /* Animation/delay timer */
+    bool  done;           /* Is testimony finished? */
+} TestimonyState;
+
+void testimony_init(TestimonyState *t);
+/* Returns true when the testimony phase is completely finished */
+bool testimony_update_and_draw(TestimonyState *t, struct ReplayBuffer *rb, float dt);
 
 #endif /* GAME_DEATHCARD_H */

@@ -170,6 +170,21 @@ bool panicroom_update_and_draw(PanicRoom *pr, NeuralNet *nn,
     DrawText(TextFormat("Weight: %.4f", selectedVal), infoX, 145, 12,
              selectedVal > 0 ? (Color){0, 200, 100, 255} : (Color){255, 80, 80, 255});
 
+    if (pr->selectedLayer == 2) {
+        const char *desc = "Unknown";
+        switch (pr->selectedNeuronX) {
+            case 0: desc = "Aggression / Chase"; break;
+            case 1: desc = "Defensive / Avoidance"; break;
+            case 2: desc = "Investigation Focus"; break;
+            case 3: desc = "Panic Exploitation"; break;
+            case 4: desc = "Environmental Hack (Lights)"; break;
+            case 5: desc = "Stalking Mode"; break;
+            case 6: desc = "Menace Pause"; break;
+            case 7: desc = "Prediction / Flanking"; break;
+        }
+        DrawText(TextFormat("Behavior: %s", desc), infoX, 160, 10, (Color){255, 200, 80, 255});
+    }
+
     /* Surgery controls */
     DrawText("SYNAPTIC SURGERY", infoX, 190, 14, (Color){255, 100, 100, 200});
     DrawText(TextFormat("Points: %d", pr->surgeryPoints), infoX, 215, 12, (Color){255, 200, 80, 200});
@@ -178,8 +193,14 @@ bool panicroom_update_and_draw(PanicRoom *pr, NeuralNet *nn,
     DrawText("[Arrows] Navigate", infoX, 270, 11, (Color){120, 120, 130, 180});
     DrawText("[1/2/3] Select layer", infoX, 285, 11, (Color){120, 120, 130, 180});
 
+    /* Behavioral Fingerprint */
+    char fingerprint[32] = {0};
+    profile_get_fingerprint(prof, fingerprint);
+    DrawText("BEHAVIORAL FINGERPRINT", infoX, 310, 14, (Color){0, 255, 200, 200});
+    DrawText(fingerprint, infoX, 335, 12, (Color){180, 180, 200, 255});
+
     /* Run history */
-    DrawText("RUN HISTORY", infoX, 330, 14, (Color){0, 255, 200, 200});
+    DrawText("RUN HISTORY", infoX, 370, 14, (Color){0, 255, 200, 200});
     int n = prof->runCount;
     if (n > 8) n = 8;
     for (int i = 0; i < n; i++) {
@@ -190,7 +211,7 @@ bool panicroom_update_and_draw(PanicRoom *pr, NeuralNet *nn,
                              r->reason == DEATH_CAUGHT ? "CAUGHT" : "TIMEOUT";
         Color rc = r->reason == DEATH_SURVIVED ? (Color){0, 255, 200, 180} : (Color){255, 80, 80, 180};
         DrawText(TextFormat("#%d %s %.0fs", r->runNumber, reason, r->survivalTime),
-                 infoX, 355 + i * 16, 11, rc);
+                 infoX, 395 + i * 16, 11, rc);
     }
 
     /* Continue hint */
