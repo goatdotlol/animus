@@ -2,36 +2,55 @@
 
 **"It doesn't hunt. It studies."**
 
-A 2.5D raycasted survival horror roguelite where the monster is a **real neural network** trained on your behavior. Built in C with Raylib. Runs on anything.
+A 2.5D raycasted survival horror roguelite where the adversary is a real neural network trained on your behavior. Built in C99 with Raylib. Runs on anything.
 
 ---
 
-## The Concept
+## Overview
 
-You are trapped in a collapsed research facility with **EREBUS** — a neural network given flesh. It begins blind, stupid, walking into walls. But every time you hide in a locker, sprint around a corner, or throw a decoy, its weights update. By run 5, it checks your hiding spots. By run 15, it predicts your inputs before you press them.
+You are trapped in a collapsed research facility with EREBUS -- a neural network given form. It begins blind, walking into walls. But every time you hide, sprint, or throw a decoy, its weights update. By run 5, it checks your hiding spots. By run 15, it predicts your inputs before you press them.
 
-**It is a literal neural network — and you are its training data.**
+The monster is a literal multi-layer perceptron. You are its training data.
 
 ## Features
 
-- 🧠 **Real Neural Network** — A genuine MLP (~800 parameters) that trains on your behavioral patterns between runs
-- 👁️ **2.5D Raycasted Engine** — DOOM-style rendering with procedural textures, distance fog, and sector lighting
-- 🎭 **The Monster Evolves** — From blind wanderer (run 1) to psychological predator (run 15+)
-- 🔬 **Menace Gauge** — Dynamic tension system the AI learns to exploit
-- 🧪 **Synaptic Surgery** — Manipulate the monster's neural architecture between runs
-- 🎵 **Procedural Audio** — Every sound generated at runtime, no external files
-- 💻 **Runs on Anything** — Targets 60fps on Intel HD 520 integrated graphics
+**Engine**
+- Custom DDA raycasting engine (DOOM-style 2.5D)
+- 10 procedural textures generated via Perlin noise at startup
+- Sector-based lighting, distance fog, floor/ceiling casting
+- CRT post-processing (scanlines, vignette, film grain)
+- Billboard sprite rendering with depth sorting
+
+**Neural Network Adversary**
+- Genuine MLP architecture (19 inputs, 32/16 hidden, 8 outputs)
+- Xavier-initialized weights with sub-millisecond inference
+- Behavioral tracking feeds real player data into the network
+- Weight persistence between runs -- the monster remembers
+- A* pathfinding with line-of-sight and hearing senses
+
+**Gameplay**
+- 13-minute timed runs with memory core objectives
+- 4 movement modes: sprint (loud), walk, crouch (quiet), freeze (silent)
+- Flashlight with limited battery
+- Death card testimony system with full behavioral statistics
+- Player profile persistence across sessions
+- Items: batteries, decoys, adrenaline, keycards
+
+**Audio**
+- Procedural sound synthesis (no external audio files)
+- Spatial audio with distance attenuation
+- Ambient drone generation
+- Dynamic footstep synthesis
 
 ## Building
 
 The game builds automatically via GitHub Actions on every push. Download the latest build from the [Actions tab](../../actions) or [Releases](../../releases).
 
-### Building Locally (requires CMake + MinGW/GCC)
+### Local Build (requires CMake + GCC or MSVC)
 
-```bash
-cmake -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
-cmake --build build
-./build/erebus
+```
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release
 ```
 
 ## Controls
@@ -40,42 +59,41 @@ cmake --build build
 |-----|--------|
 | WASD | Move |
 | Mouse | Look |
-| Shift | Sprint (loud) |
-| Ctrl | Crouch (quiet) |
-| Space | Freeze (silent) |
+| Shift | Sprint |
+| Ctrl | Crouch |
+| Space | Freeze |
 | F | Toggle flashlight |
+| E | Use item |
 | Tab | Toggle minimap |
-| F3 | Debug info |
-| Esc | Pause |
+| F3 | Debug overlay |
+| Esc | Pause / Options |
 
-## Tech Stack
+## Technical Details
 
-| Component | Technology |
-|-----------|-----------|
+| Component | Implementation |
+|-----------|---------------|
 | Language | C (C99) |
-| Framework | Raylib 5.5 |
-| Renderer | Custom DDA raycaster |
-| Neural Net | Hand-written MLP in C |
-| Build | CMake + GitHub Actions |
-| Textures | 100% procedural (Perlin noise) |
+| Graphics | Raylib 5.5 |
+| Renderer | Custom DDA raycaster (384x216 internal) |
+| AI | Hand-written MLP with backpropagation |
+| Pathfinding | A* on sector grid |
+| Textures | Procedural (Perlin noise) |
+| Audio | Procedural synthesis |
+| Build System | CMake + GitHub Actions |
 
-## Development Roadmap
+## Development Status
 
-- [x] **Sprint 1** — Raycasting engine, procedural textures, player movement
-- [ ] **Sprint 2** — Neural network + monster AI
-- [ ] **Sprint 3** — Game loop (objectives, items, death cards)
-- [ ] **Sprint 4** — Learning brain (between-run training, weight persistence)
-- [ ] **Sprint 5** — Panic Room (between-run hub, synaptic surgery)
-- [ ] **Sprint 6** — Advanced AI (Menace Gauge, overfitting boss, deception)
-- [ ] **Sprint 7** — Procedural audio engine
-- [ ] **Sprint 8** — Visual polish (CRT shaders, sprite morphing)
-- [ ] **Sprint 9** — Narrative & endings
-- [ ] **Sprint 10** — Release
+- [x] Sprint 1 -- Raycasting engine, procedural textures, player movement
+- [x] Sprint 2 -- Neural network, monster AI, pathfinding
+- [x] Sprint 3 -- Game loop, objectives, death cards, persistence
+- [x] Sprint 4 -- Learning brain, backpropagation, weight mutation
+- [ ] Sprint 5 -- Panic Room hub, synaptic surgery
+- [ ] Sprint 6 -- Advanced AI (Menace Gauge, overfitting boss)
+- [ ] Sprint 7 -- Procedural audio engine
+- [ ] Sprint 8 -- Visual polish (GPU shaders, sprite morphing)
+- [ ] Sprint 9 -- Narrative, endings, Architect Mode
+- [ ] Sprint 10 -- Release optimization
 
-## Credits
+---
 
-Designed by FiveSaw.
-
-## License
-
-MIT
+Built by FiveSaw.

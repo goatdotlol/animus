@@ -14,11 +14,14 @@
 #include "engine/raycaster.h"
 #include "engine/texgen.h"
 #include "engine/postfx.h"
+#include "engine/audio.h"
 #include "world/map.h"
 #include "game/player.h"
 #include "game/items.h"
 #include "game/deathcard.h"
+#include "game/options.h"
 #include "ai/monster.h"
+#include "ai/training.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -29,6 +32,7 @@ typedef enum {
     STATE_TITLE,
     STATE_PLAYING,
     STATE_PAUSED,
+    STATE_OPTIONS,
     STATE_DEATH,
     STATE_PANIC_ROOM
 } GameState;
@@ -52,13 +56,23 @@ typedef struct {
     DeathReason   lastDeathReason;
     float         deathScreenTimer;
 
+    /* Audio */
+    AudioEngine   audio;
+
+    /* Training */
+    ReplayBuffer  replayBuf;
+    float         replayTimer; /* Record samples every N seconds */
+
+    /* Options */
+    GameOptions   options;
+
     /* Debug */
     bool  showMinimap;
     bool  showDebugInfo;
 
     /* Timing */
-    float runTimer;       /* 13 minutes countdown */
-    int   runNumber;      /* Current run count     */
+    float runTimer;
+    int   runNumber;
 } Game;
 
 /* ── Draw the debug minimap ───────────────────────────────────────── */
@@ -237,6 +251,17 @@ int main(void) {
     profile_init(&game.profile);
     profile_load(&game.profile, "erebus_profile.dat");
 
+    /* Initialize audio engine */
+    audio_init(&game.audio);
+
+    /* Initialize options (load if exists) */
+    options_init(&game.options);
+    options_load(&game.options, "erebus_options.dat");
+
+    /* Initialize replay buffer for training */
+    replay_init(&game.replayBuf);
+    game.replayTimer = 0;
+
     /* Ensure nearest-neighbor filtering for crisp pixels */
     SetTextureFilter(game.renderer.screenTex, TEXTURE_FILTER_POINT);
 
@@ -279,6 +304,24 @@ int main(void) {
             /* Update items (collection) */
             items_update(game.items, game.itemCount, &game.player, &game.inventory, dt);
 
+            /* Update audio engine */
+            {
+                float mdx2 = game.monster.x - game.player.posX;
+                float mdy2 = game.monster.y - game.player.posY;
+                float mDist = sqrtf(mdx2*mdx2 + mdy2*mdy2);
+                audio_update(&game.audio, &game.player, mDist, dt);
+            }
+
+            /* Record replay samples for training (every 0.5s) */
+            game.replayTimer += dt;
+            if (game.replayTimer >= 0.5f) {
+                game.replayTimer = 0;
+                float mdx2 = game.monster.x - game.player.posX;
+                float mdy2 = game.monster.y - game.player.posY;
+                float mDist = sqrtf(mdx2*mdx2 + mdy2*mdy2);
+                float reward = (mDist < 3.0f) ? 1.0f : (mDist < 8.0f) ? 0.3f : -0.1f;
+                replay_record(&game.replayBuf, game.monster.brain.a0, game.monster.brain.a3, reward);
+            }
             /* Check if monster caught player */
             {
                 float mdx = game.monster.x - game.player.posX;
@@ -370,6 +413,9 @@ int main(void) {
                 game.state = STATE_PLAYING;
                 DisableCursor();
             }
+            if (IsKeyPressed(KEY_O)) {
+                game.state = STATE_OPTIONS;
+            }
 
             BeginDrawing();
             ClearBackground((Color){5, 5, 10, 255});
@@ -378,15 +424,44 @@ int main(void) {
             int sh = GetScreenHeight();
             const char *pauseText = "P A U S E D";
             int pw = MeasureText(pauseText, 40);
-            DrawText(pauseText, (sw - pw) / 2, sh / 2 - 30, 40, (Color){0, 255, 200, 200});
+            DrawText(pauseText, (sw - pw) / 2, sh / 2 - 50, 40, (Color){0, 255, 200, 200});
 
             const char *resume = "[ ESC ] Resume";
             int rw = MeasureText(resume, 16);
-            DrawText(resume, (sw - rw) / 2, sh / 2 + 30, 16, (Color){100, 100, 120, 180});
+            DrawText(resume, (sw - rw) / 2, sh / 2 + 10, 16, (Color){100, 100, 120, 180});
+
+            const char *optStr = "[ O ] Options";
+            int ow = MeasureText(optStr, 16);
+            DrawText(optStr, (sw - ow) / 2, sh / 2 + 35, 16, (Color){100, 100, 120, 180});
 
             DrawText(TextFormat("Run #%d", game.runNumber), 20, sh - 30, 12, (Color){60, 60, 70, 150});
 
             EndDrawing();
+            break;
+        }
+
+        /* ── OPTIONS ───────────────────────────────────────────── */
+        case STATE_OPTIONS: {
+            BeginDrawing();
+            bool closed = options_draw(&game.options);
+            EndDrawing();
+
+            if (closed) {
+                /* Apply audio settings */
+                audio_set_volumes(&game.audio, game.options.masterVolume,
+                                  game.options.sfxVolume, game.options.musicVolume);
+                /* Apply post-fx settings */
+                game.postfx.enabled = game.options.postFXEnabled;
+                game.postfx.scanlineIntensity = game.options.scanlineIntensity;
+                game.postfx.vignetteStrength = game.options.vignetteStrength;
+                game.showMinimap = game.options.showMinimap;
+                /* Save options */
+                options_save(&game.options, "erebus_options.dat");
+                /* Fullscreen toggle */
+                if (game.options.fullscreen && !IsWindowFullscreen()) ToggleFullscreen();
+                if (!game.options.fullscreen && IsWindowFullscreen()) ToggleFullscreen();
+                game.state = STATE_PAUSED;
+            }
             break;
         }
 
@@ -409,6 +484,13 @@ int main(void) {
                 profile_record_run(&game.profile, &rec);
                 profile_save(&game.profile, "erebus_profile.dat");
                 nn_save(&game.monster.brain, "erebus_brain.dat");
+
+                /* TRAIN the neural network on this run's data */
+                training_run(&game.monster.brain, &game.replayBuf, &game.profile);
+                training_mutate(&game.monster.brain, &game.profile, game.runNumber * 7919);
+                replay_init(&game.replayBuf); /* Clear buffer for next run */
+
+                audio_play_death(&game.audio);
             }
 
             if (IsKeyPressed(KEY_ENTER)) {
@@ -496,6 +578,8 @@ int main(void) {
     /* ── Cleanup ────────────────────────────────────────────────── */
     profile_save(&game.profile, "erebus_profile.dat");
     nn_save(&game.monster.brain, "erebus_brain.dat");
+    options_save(&game.options, "erebus_options.dat");
+    audio_free(&game.audio);
     rc_free(&game.renderer);
     CloseWindow();
     return 0;

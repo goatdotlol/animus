@@ -27,6 +27,9 @@ set(SOURCES
     src/ai/monster.c
     src/game/items.c
     src/game/deathcard.c
+    src/game/options.c
+    src/ai/training.c
+    src/engine/audio.c
 )
 
 # ── Build the executable ────────────────────────────────────────────
