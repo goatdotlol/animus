@@ -23,6 +23,7 @@ typedef struct {
     float viewOffsetX;
     float viewOffsetY;
     float glitchTimer;
+    int   synapsesCutThisSession;
 } PanicRoom;
 
 void panicroom_init(PanicRoom *pr, int surgeryPoints);

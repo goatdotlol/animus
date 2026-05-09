@@ -15,6 +15,7 @@ void panicroom_init(PanicRoom *pr, int surgeryPoints) {
     pr->viewOffsetX = 0;
     pr->viewOffsetY = 0;
     pr->glitchTimer = 0;
+    pr->synapsesCutThisSession = 0;
 }
 
 /* Map a weight value to a color */
@@ -92,6 +93,7 @@ bool panicroom_update_and_draw(PanicRoom *pr, NeuralNet *nn,
         if (w) {
             *w *= 0.1f; /* Severe damage */
             pr->glitchTimer = 0;
+            pr->synapsesCutThisSession++;
         }
     }
 

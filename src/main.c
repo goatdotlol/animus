@@ -22,6 +22,7 @@
 #include "game/deathcard.h"
 #include "game/options.h"
 #include "game/panicroom.h"
+#include "game/narrative.h"
 #include "ai/monster.h"
 #include "ai/training.h"
 
@@ -36,7 +37,8 @@ typedef enum {
     STATE_PAUSED,
     STATE_OPTIONS,
     STATE_DEATH,
-    STATE_PANIC_ROOM
+    STATE_PANIC_ROOM,
+    STATE_NARRATIVE_ENDING
 } GameState;
 
 /* ── Global Game Context ──────────────────────────────────────────── */
@@ -71,6 +73,10 @@ typedef struct {
     /* Panic Room */
     PanicRoom     panicRoom;
     MapGenResult  mapGenResult;
+    int           totalSynapsesCut;
+
+    /* Narrative */
+    NarrativeState narrative;
 
     /* Debug */
     bool  showMinimap;
@@ -268,6 +274,10 @@ int main(void) {
     replay_init(&game.replayBuf);
     game.replayTimer = 0;
 
+    /* Initialize narrative */
+    narrative_init(&game.narrative);
+    game.totalSynapsesCut = 0;
+
     /* Ensure nearest-neighbor filtering for crisp pixels */
     SetTextureFilter(game.renderer.screenTex, TEXTURE_FILTER_POINT);
 
@@ -436,6 +446,9 @@ int main(void) {
             /* Debug info */
             if (game.showDebugInfo) draw_debug(&game);
 
+            /* Architect mode: subtle messages from the monster */
+            narrative_draw_architect_hints(&game.narrative, dt);
+
             EndDrawing();
             break;
 
@@ -526,10 +539,17 @@ int main(void) {
             }
 
             if (IsKeyPressed(KEY_ENTER)) {
-                /* Go to Panic Room between runs */
-                int surgPts = 1 + (int)(game.player.timeHiding / 30.0f);
-                panicroom_init(&game.panicRoom, surgPts);
-                game.state = STATE_PANIC_ROOM;
+                bool escaped = (game.lastDeathReason == DEATH_SURVIVED);
+                EndingType ending = narrative_check_ending(&game.narrative, &game.profile, game.totalSynapsesCut, escaped);
+                
+                if (ending != ENDING_NONE && ending != ENDING_LOBOTOMY) {
+                    game.state = STATE_NARRATIVE_ENDING;
+                } else {
+                    /* Go to Panic Room between runs */
+                    int surgPts = 1 + (int)(game.player.timeHiding / 30.0f);
+                    panicroom_init(&game.panicRoom, surgPts);
+                    game.state = STATE_PANIC_ROOM;
+                }
             }
 
             BeginDrawing();
@@ -598,9 +618,15 @@ int main(void) {
             EndDrawing();
 
             if (done) {
-                /* Generate new procedural map for next run */
-                game.runNumber++;
-                game.runTimer = 13.0f * 60.0f;
+                game.totalSynapsesCut += game.panicRoom.synapsesCutThisSession;
+                EndingType ending = narrative_check_ending(&game.narrative, &game.profile, game.totalSynapsesCut, false);
+                
+                if (ending == ENDING_LOBOTOMY) {
+                    game.state = STATE_NARRATIVE_ENDING;
+                } else {
+                    /* Generate new procedural map for next run */
+                    game.runNumber++;
+                    game.runTimer = 13.0f * 60.0f;
 
                 /* Reset renderer sprites for new map */
                 game.renderer.spriteCount = 0;
@@ -619,6 +645,21 @@ int main(void) {
 
                 game.state = STATE_PLAYING;
                 DisableCursor();
+            }
+            break;
+        }
+
+        /* -- NARRATIVE ENDING ------------------------------------ */
+        case STATE_NARRATIVE_ENDING: {
+            BeginDrawing();
+            bool done = narrative_draw_ending(&game.narrative, game.narrative.lastEnding, dt);
+            EndDrawing();
+
+            if (done) {
+                /* Return to title screen after an ending */
+                game.state = STATE_TITLE;
+                game.runNumber = 1;
+                game.totalSynapsesCut = 0;
             }
             break;
         }

@@ -32,6 +32,7 @@ set(SOURCES
     src/engine/audio.c
     src/world/mapgen.c
     src/game/panicroom.c
+    src/game/narrative.c
 )
 
 # ── Build the executable ────────────────────────────────────────────
